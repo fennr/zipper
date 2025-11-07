@@ -1,25 +1,65 @@
-name: Release
+name: Release Builds
 
 on:
   release:
-    types: [created]
-
-permissions:
-  contents: write
+    types: [published]
 
 jobs:
   build:
-    name: release ${{ matrix.target }}
-    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        target: [x86_64-pc-windows-gnu, x86_64-unknown-linux-musl]
+        include:
+          - os: ubuntu-latest
+            target: linux-x86_64
+            binary: zipper
+          - os: macos-latest
+            target: macos-aarch64
+            binary: zipper
+          - os: windows-latest
+            target: windows-x86_64.exe
+            binary: zipper.exe
+
     steps:
-      - uses: actions/checkout@master
-      - name: Compile and release
-        uses: rust-build/rust-build.action@v1.4.5
+      - name: Checkout sources
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo directories
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      - name: Build release binary
+        run: cargo build --release --locked
+
+      - name: Prepare artifact
+        id: package
+        shell: bash
+        run: |
+          mkdir -p dist
+          cp target/release/${{ matrix.binary }} dist/zipper-${{ matrix.target }}
+          echo "asset=dist/zipper-${{ matrix.target }}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: zipper-${{ matrix.target }}
+          path: dist/zipper-${{ matrix.target }}
+
+      - name: Upload release asset
+        uses: softprops/action-gh-release@v1
+        with:
+          files: ${{ steps.package.outputs.asset }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          RUSTTARGET: ${{ matrix.target }}
