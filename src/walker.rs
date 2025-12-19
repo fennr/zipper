@@ -87,10 +87,6 @@ pub fn walk_repository_files(repo_path: &Path) -> Result<Vec<PathBuf>> {
             Ok(entry) => {
                 let path = entry.path();
 
-                if path.to_string_lossy().contains(".git") {
-                    continue;
-                }
-
                 if path.is_file() {
                     files.push(path.to_path_buf());
                 }
